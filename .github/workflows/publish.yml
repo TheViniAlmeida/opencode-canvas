@@ -35,7 +35,22 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      # Check if version already published
+      - name: Check if version exists
+        id: version-check
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version ${PACKAGE_VERSION} already published, skipping..."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version ${PACKAGE_VERSION} not found, will publish..."
+          fi
+
       # Trusted Publishing via OIDC - no token needed!
       # See: https://docs.npmjs.com/trusted-publishers/
       - name: Publish to npm
+        if: steps.version-check.outputs.exists == 'false'
         run: npm publish --access public --provenance
