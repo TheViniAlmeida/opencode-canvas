@@ -2,7 +2,7 @@
 
 Interactive terminal canvases for [OpenCode](https://opencode.ai) - spawn rich TUI interfaces for calendars, documents, flight bookings, and more directly from your AI coding assistant.
 
-![Canvas Demo](https://github.com/mailshieldai/opencode-canvas/raw/main/media/screenshot.png)
+![Canvas Demo](./media/screenshot.png)
 
 ## What is this?
 

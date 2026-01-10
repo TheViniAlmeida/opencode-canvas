@@ -31,7 +31,8 @@
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "media"
   ],
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.85",
