@@ -1,88 +1,165 @@
 # opencode-canvas
 
-Interactive terminal canvases for OpenCode - calendars, documents, flight booking
+Interactive terminal canvases for [OpenCode](https://opencode.ai) - spawn rich TUI interfaces for calendars, documents, flight bookings, and more directly from your AI coding assistant.
 
-> An OpenCode plugin created from the [opencode-plugin-template](https://github.com/zenobi-us/opencode-plugin-template)
+![Canvas Demo](https://github.com/mailshieldai/opencode-canvas/raw/main/media/screenshot.png)
 
-## Features
+## What is this?
 
-- 🏗️ TypeScript-based plugin architecture
-- 🔧 Mise task runner integration
-- 📦 Bun/npm build tooling
-- ✨ ESLint + Prettier formatting
-- 🧪 Vitest testing setup
-- 🚀 GitHub Actions CI/CD
-- 📝 Release automation with release-please
+opencode-canvas gives OpenCode its own display. Instead of text-only responses, the AI can spawn interactive terminal interfaces in tmux split panes. This enables:
 
-## Getting Started
+- **Calendar views** - Visual date pickers and event displays
+- **Document editors** - Rich text editing with selections
+- **Flight booking** - Interactive flight search and selection
+- **Custom canvases** - Build your own TUI interfaces
 
-1. **Clone this template:**
+## Requirements
 
-   ```bash
-   cp -r opencode-plugin-template your-plugin-name
-   cd your-plugin-name
-   ```
+- [Bun](https://bun.sh) - JavaScript runtime
+- [tmux](https://github.com/tmux/tmux) - Canvases spawn in split panes
+- [OpenCode](https://opencode.ai) - AI coding assistant
 
-2. **Update package.json:**
-   - Change `name` to your plugin name
-   - Update `description`
-   - Update `repository.url`
+## Installation
 
-3. **Install dependencies:**
+### From npm
 
-   ```bash
-   bun install
-   ```
+```bash
+npm install opencode-canvas
+# or
+bun add opencode-canvas
+```
 
-4. **Implement your plugin in `src/index.ts`:**
+### From source
 
-   ```typescript
-   import type { Plugin } from '@opencode-ai/plugin';
+```bash
+git clone https://github.com/mailshieldai/opencode-canvas
+cd opencode-canvas
+bun install
+bun run build
+```
 
-   export const YourPlugin: Plugin = async (ctx) => {
-     return {
-       tool: {
-         // Your plugin tools here
-       },
-     };
-   };
-   ```
+## Configuration
 
-5. **Test your plugin:**
-   ```bash
-   mise run test
-   ```
+Add to your `opencode.jsonc` (in project root or `~/.config/opencode/config.json`):
 
-## Development
-
-- `mise run build` - Build the plugin
-- `mise run test` - Run tests
-- `mise run lint` - Lint code
-- `mise run lint:fix` - Fix linting issues
-- `mise run format` - Format code with Prettier
-
-## Installation in OpenCode
-
-Create or edit `~/.config/opencode/config.json`:
-
-```json
+```jsonc
 {
-  "plugins": ["opencode-canvas"]
+  "plugin": ["opencode-canvas"],
+  "permission": {
+    "canvas_*": "allow"
+  }
 }
 ```
 
-## Author
+## Tools
 
-Harsha <harsha@example.com>
+The plugin provides 4 tools:
 
-## Repository
+| Tool | Description |
+|------|-------------|
+| `canvas_spawn` | Create a new canvas (calendar, document, or flight) |
+| `canvas_update` | Update canvas state via IPC |
+| `canvas_selection` | Get current selection from canvas |
+| `canvas_close` | Close a canvas session |
 
-https://github.com/user/opencode-canvas
+### canvas_spawn
 
-## Contributing
+Spawns a new canvas in a tmux split pane.
 
-Contributions are welcome! Please file issues or submit pull requests on the GitHub repository.
+```typescript
+canvas_spawn({
+  canvas_type: "calendar" | "document" | "flight",
+  initial_state: { /* canvas-specific state */ }
+})
+```
+
+### canvas_update
+
+Updates the state of an existing canvas.
+
+```typescript
+canvas_update({
+  session_id: "canvas-abc123",
+  state: { /* new state */ }
+})
+```
+
+### canvas_selection
+
+Retrieves the current selection from a canvas (e.g., selected date, highlighted text).
+
+```typescript
+canvas_selection({
+  session_id: "canvas-abc123"
+})
+```
+
+### canvas_close
+
+Closes a canvas and cleans up resources.
+
+```typescript
+canvas_close({
+  session_id: "canvas-abc123"
+})
+```
+
+## Skills
+
+The plugin includes skills that teach OpenCode how to use each canvas type:
+
+- `canvas` - General canvas usage patterns
+- `calendar` - Calendar-specific interactions
+- `document` - Document editing patterns
+- `flight` - Flight booking workflows
+
+## Architecture
+
+```
+┌─────────────────┐     IPC (Unix Socket)     ┌─────────────────┐
+│   OpenCode      │◄──────────────────────────►│  Canvas TUI     │
+│   (Controller)  │                            │  (React/Ink)    │
+└─────────────────┘                            └─────────────────┘
+        │                                              │
+        │ tool calls                                   │ renders in
+        ▼                                              ▼
+┌─────────────────┐                            ┌─────────────────┐
+│  opencode-canvas│                            │  tmux split     │
+│  plugin         │                            │  pane           │
+└─────────────────┘                            └─────────────────┘
+```
+
+## Development
+
+```bash
+# Install dependencies
+bun install
+
+# Build plugin
+bun run build
+
+# Run tests
+bun test
+
+# Lint
+bun run lint
+```
+
+## Publishing to npm
+
+```bash
+# Login to npm (one-time)
+npm login
+
+# Build and publish
+bun run build
+npm publish
+```
 
 ## License
 
-MIT License. See the [LICENSE](LICENSE) file for details.
+MIT - See [LICENSE](LICENSE) for details.
+
+## Credits
+
+Based on [claude-canvas](https://github.com/dvdsgl/claude-canvas) by David Siegel, adapted for OpenCode by [MailShield AI](https://github.com/mailshieldai).
