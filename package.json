@@ -1,5 +1,5 @@
 {
-  "name": "opencode-canvas",
+  "name": "@mailshieldai/opencode-canvas",
   "version": "0.1.0",
   "description": "Interactive terminal canvases for OpenCode - calendars, documents, flight booking",
   "author": {
