@@ -24,9 +24,9 @@ opencode-canvas gives OpenCode its own display. Instead of text-only responses, 
 ### From npm
 
 ```bash
-npm install opencode-canvas
+npm install @mailshieldai/opencode-canvas
 # or
-bun add opencode-canvas
+bun add @mailshieldai/opencode-canvas
 ```
 
 ### From source
@@ -44,7 +44,7 @@ Add to your `opencode.jsonc` (in project root or `~/.config/opencode/config.json
 
 ```jsonc
 {
-  "plugin": ["opencode-canvas"],
+  "plugin": ["@mailshieldai/opencode-canvas"],
   "permission": {
     "canvas_*": "allow"
   }
