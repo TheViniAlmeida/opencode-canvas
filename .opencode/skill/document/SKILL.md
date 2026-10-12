@@ -11,7 +11,7 @@ Display markdown documents with optional text selection and diff highlighting.
 
 ## Example Prompts
 
-Try asking Claude:
+Try asking OpenCode:
 
 - "Draft an email to the marketing team about the Q1 product launch"
 - "Help me edit this blog post - show it so I can highlight the parts to revise"

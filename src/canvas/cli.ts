@@ -1,215 +1,89 @@
 #!/usr/bin/env bun
-import { program } from "commander";
-import { detectTerminal, spawnCanvas } from "./terminal";
+import { program } from 'commander';
+import { readFile } from 'node:fs/promises';
+import { detectTerminal, spawnCanvas, validateCanvas } from './terminal.ts';
+import { sendCanvasMessage, socketPathFor } from '../plugin/ipc.ts';
 
-// Set window title via ANSI escape codes
+interface CanvasOptions {
+  id?: string;
+  config?: string;
+  configFile?: string;
+  socket?: string;
+  scenario?: string;
+}
+
+async function configText(options: CanvasOptions): Promise<string | undefined> {
+  if (options.config && options.configFile) throw new Error('Use either --config or --config-file');
+  return options.configFile ? readFile(options.configFile, 'utf8') : options.config;
+}
+
 function setWindowTitle(title: string) {
   process.stdout.write(`\x1b]0;${title}\x07`);
 }
 
-program
-  .name("claude-canvas")
-  .description("Interactive terminal canvases for Claude")
-  .version("1.0.0");
+function commonOptions(command: ReturnType<typeof program.command>) {
+  return command
+    .option('--id <id>', 'Canvas ID')
+    .option('--config <json>', 'Canvas configuration (JSON)')
+    .option('--config-file <path>', 'Read canvas configuration from a file')
+    .option('--socket <path>', 'Unix socket path for IPC')
+    .option('--scenario <name>', 'Canvas scenario');
+}
 
-program
-  .command("show [kind]")
-  .description("Show a canvas in the current terminal")
-  .option("--id <id>", "Canvas ID")
-  .option("--config <json>", "Canvas configuration (JSON)")
-  .option("--socket <path>", "Unix socket path for IPC")
-  .option("--scenario <name>", "Scenario name (e.g., display, meeting-picker)")
-  .action(async (kind = "demo", options) => {
+const { version } = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+program.name('opencode-canvas').description('Interactive terminal canvases for OpenCode').version(version);
+
+commonOptions(program.command('show <kind>').description('Show a canvas in the current terminal'))
+  .action(async (kind: string, options: CanvasOptions) => {
     const id = options.id || `${kind}-1`;
-    const config = options.config ? JSON.parse(options.config) : undefined;
-    const socketPath = options.socket;
-    const scenario = options.scenario || "display";
-
-    // Set window title
+    const config = await configText(options);
+    const validated = validateCanvas(kind, id, options.scenario, config);
     setWindowTitle(`canvas: ${kind}`);
-
-    // Dynamically import and render the canvas
-    const { renderCanvas } = await import("./canvases");
-    await renderCanvas(kind, id, config, { socketPath, scenario });
+    const { renderCanvas } = await import('./canvases/index.tsx');
+    await renderCanvas(kind, id, validated.config, {
+      socketPath: options.socket,
+      scenario: validated.scenario,
+    });
   });
 
-program
-  .command("spawn [kind]")
-  .description("Spawn a canvas in a new terminal window")
-  .option("--id <id>", "Canvas ID")
-  .option("--config <json>", "Canvas configuration (JSON)")
-  .option("--socket <path>", "Unix socket path for IPC")
-  .option("--scenario <name>", "Scenario name (e.g., display, meeting-picker)")
-  .action(async (kind = "demo", options) => {
-    const id = options.id || `${kind}-1`;
-    const result = await spawnCanvas(kind, id, options.config, {
+commonOptions(program.command('spawn <kind>').description('Spawn a canvas in a tmux split pane'))
+  .action(async (kind: string, options: CanvasOptions) => {
+    const id = options.id || `${kind}-${Date.now()}`;
+    const result = await spawnCanvas(kind, id, await configText(options), {
       socketPath: options.socket,
       scenario: options.scenario,
     });
-    console.log(`Spawned ${kind} canvas '${id}' via ${result.method}`);
+    console.log(JSON.stringify({ success: true, id, kind, ...result }));
   });
 
-program
-  .command("env")
-  .description("Show detected terminal environment")
-  .action(() => {
-    const env = detectTerminal();
-    console.log("Terminal Environment:");
-    console.log(`  In tmux: ${env.inTmux}`);
-    console.log(`\nSummary: ${env.summary}`);
+program.command('env').description('Show detected terminal environment').action(() => {
+  console.log(JSON.stringify(detectTerminal()));
+});
+
+program.command('update <id>').description('Update a running canvas')
+  .requiredOption('--config <json>', 'New JSON configuration')
+  .action(async (id: string, options: { config: string }) => {
+    const config = JSON.parse(options.config) as unknown;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Config must be a JSON object');
+    await sendCanvasMessage(socketPathFor(id), { type: 'update', config }, 'ack');
+    console.log(JSON.stringify({ success: true, id }));
   });
 
-program
-  .command("update <id>")
-  .description("Send updated config to a running canvas via IPC")
-  .option("--config <json>", "New canvas configuration (JSON)")
-  .action(async (id: string, options) => {
-    const { getSocketPath } = await import("./ipc/types");
-    const socketPath = getSocketPath(id);
-    const config = options.config ? JSON.parse(options.config) : {};
-
-    try {
-      const socket = await Bun.connect({
-        unix: socketPath,
-        socket: {
-          data(socket, data) {
-            // Ignore responses
-          },
-          open(socket) {
-            const msg = JSON.stringify({ type: "update", config });
-            socket.write(msg + "\n");
-            socket.end();
-          },
-          close() {},
-          error(socket, error) {
-            console.error("Socket error:", error);
-          },
-        },
-      });
-      console.log(`Sent update to canvas '${id}'`);
-    } catch (err) {
-      console.error(`Failed to connect to canvas '${id}':`, err);
-    }
-  });
-
-program
-  .command("selection <id>")
-  .description("Get the current selection from a running document canvas")
+program.command('selection <id>').description('Read the current document selection')
   .action(async (id: string) => {
-    const { getSocketPath } = await import("./ipc/types");
-    const socketPath = getSocketPath(id);
-
-    try {
-      let resolved = false;
-      const result = await new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          if (!resolved) {
-            resolved = true;
-            reject(new Error("Timeout waiting for response"));
-          }
-        }, 2000);
-
-        Bun.connect({
-          unix: socketPath,
-          socket: {
-            data(socket, data) {
-              if (resolved) return;
-              clearTimeout(timeout);
-              resolved = true;
-              const response = JSON.parse(data.toString().trim());
-              if (response.type === "selection") {
-                resolve(JSON.stringify(response.data));
-              } else {
-                resolve(JSON.stringify(null));
-              }
-              socket.end();
-            },
-            open(socket) {
-              const msg = JSON.stringify({ type: "getSelection" });
-              socket.write(msg + "\n");
-            },
-            close() {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timeout);
-                resolve(JSON.stringify(null));
-              }
-            },
-            error(socket, error) {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timeout);
-                reject(error);
-              }
-            },
-          },
-        });
-      });
-      console.log(result);
-    } catch (err) {
-      console.error(`Failed to get selection from canvas '${id}':`, err);
-      process.exit(1);
-    }
+    const reply = await sendCanvasMessage(socketPathFor(id), { type: 'getSelection' }, 'selection');
+    console.log(JSON.stringify(reply?.data ?? null));
   });
 
-program
-  .command("content <id>")
-  .description("Get the current content from a running document canvas")
+program.command('content <id>').description('Read current document content')
   .action(async (id: string) => {
-    const { getSocketPath } = await import("./ipc/types");
-    const socketPath = getSocketPath(id);
-
-    try {
-      let resolved = false;
-      const result = await new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          if (!resolved) {
-            resolved = true;
-            reject(new Error("Timeout waiting for response"));
-          }
-        }, 2000);
-
-        Bun.connect({
-          unix: socketPath,
-          socket: {
-            data(socket, data) {
-              if (resolved) return;
-              clearTimeout(timeout);
-              resolved = true;
-              const response = JSON.parse(data.toString().trim());
-              if (response.type === "content") {
-                resolve(JSON.stringify(response.data));
-              } else {
-                resolve(JSON.stringify(null));
-              }
-              socket.end();
-            },
-            open(socket) {
-              const msg = JSON.stringify({ type: "getContent" });
-              socket.write(msg + "\n");
-            },
-            close() {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timeout);
-                resolve(JSON.stringify(null));
-              }
-            },
-            error(socket, error) {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timeout);
-                reject(error);
-              }
-            },
-          },
-        });
-      });
-      console.log(result);
-    } catch (err) {
-      console.error(`Failed to get content from canvas '${id}':`, err);
-      process.exit(1);
-    }
+    const reply = await sendCanvasMessage(socketPathFor(id), { type: 'getContent' }, 'content');
+    console.log(JSON.stringify(reply?.data ?? null));
   });
 
-program.parse();
+await program.parseAsync().catch(error => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

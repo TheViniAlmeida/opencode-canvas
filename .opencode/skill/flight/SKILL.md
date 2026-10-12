@@ -11,7 +11,7 @@ Cyberpunk-themed flight comparison and seat selection interface.
 
 ## Example Prompts
 
-Try asking Claude:
+Try asking OpenCode:
 
 - "Find flights from San Francisco to Denver on January 15th"
 - "Book me a window seat on the cheapest nonstop to NYC"

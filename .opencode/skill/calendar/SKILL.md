@@ -11,7 +11,7 @@ Display calendar views and enable interactive meeting time selection.
 
 ## Example Prompts
 
-Try asking Claude:
+Try asking OpenCode:
 
 - "Schedule a 30-minute meeting with Alice and Bob sometime next week"
 - "Find a time when the engineering team is all free on Tuesday"

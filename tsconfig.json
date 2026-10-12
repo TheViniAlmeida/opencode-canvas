@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -8,6 +11,16 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["bun-types"]
-  }
+    "types": [
+      "bun-types"
+    ],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/index.ts",
+    "src/plugin/**/*.ts",
+    "src/canvas/cli.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts"
+  ]
 }
