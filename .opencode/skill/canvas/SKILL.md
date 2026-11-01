@@ -11,7 +11,7 @@ description: |
 
 ## Example Prompts
 
-Try asking Claude things like:
+Try asking OpenCode things like:
 
 **Calendar:**
 - "Schedule a meeting with the team next week"
@@ -73,14 +73,6 @@ Get text selection from a document canvas.
 ```typescript
 canvas_selection({ id: "document-1234567890-abc123" })
 // Returns: { success: true, selection: { selectedText: "...", startOffset: 0, endOffset: 10 } }
-```
-
-### `canvas_content`
-Get full content from a document canvas.
-
-```typescript
-canvas_content({ id: "document-1234567890-abc123" })
-// Returns: { success: true, content: { content: "...", cursorPosition: 0 } }
 ```
 
 ### `canvas_close`

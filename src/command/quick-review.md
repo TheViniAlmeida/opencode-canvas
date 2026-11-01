@@ -1,6 +1,5 @@
 ---
 description: Quick code review of staged changes
-agent: plan
 ---
 
 Review the staged git changes and provide:

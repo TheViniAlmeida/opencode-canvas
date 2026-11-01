@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
 import { MeetingPickerView } from "./calendar/scenarios/meeting-picker-view";
 import type { MeetingPickerConfig } from "../scenarios/types";
+import { useIPCServer } from "./calendar/hooks/use-ipc-server.ts";
 
 export interface CalendarEvent {
   id: string;
@@ -181,7 +182,7 @@ function DayColumn({ date, events, isToday, columnWidth, slotHeights, currentTim
   const showNowLine = currentHour >= START_HOUR && currentHour < END_HOUR;
 
   // Build half-hour slots (2 rows per hour)
-  const slots: JSX.Element[] = [];
+  const slots: React.JSX.Element[] = [];
   let slotIndex = 0;
   let cumulativeHeight = 0;
 
@@ -211,7 +212,7 @@ function DayColumn({ date, events, isToday, columnWidth, slotHeights, currentTim
         : -1;
 
       // Build content for multiple lines if thisSlotHeight > 1
-      const lines: JSX.Element[] = [];
+      const lines: React.JSX.Element[] = [];
       for (let line = 0; line < thisSlotHeight; line++) {
         const isNowLine = line === nowLinePosition;
 
@@ -347,20 +348,30 @@ function AllDayEventsRow({ weekDays, events, columnWidth, timeColumnWidth }: All
 
 export function Calendar({ id, config, socketPath, scenario = "display" }: Props) {
   // Route to meeting picker if that scenario is requested
-  if (scenario === "meeting-picker" && config?.calendars) {
+  if (scenario === "meeting-picker") {
     const pickerConfig: MeetingPickerConfig = {
-      calendars: config.calendars,
-      slotGranularity: config.slotGranularity || 30,
-      minDuration: config.minDuration || 30,
-      maxDuration: config.maxDuration || 120,
-      title: config.title,
+      calendars: config?.calendars || [],
+      slotGranularity: config?.slotGranularity || 30,
+      minDuration: config?.minDuration || 30,
+      maxDuration: config?.maxDuration || 120,
+      title: config?.title,
       startHour: 6,
       endHour: 22,
     };
     return <MeetingPickerView id={id} config={pickerConfig} socketPath={socketPath} />;
   }
 
-  // Default display scenario
+  return <CalendarDisplay id={id} config={config} socketPath={socketPath} scenario={scenario} />;
+}
+
+function CalendarDisplay({ config: initialConfig, socketPath, scenario = "display" }: Props) {
+  const [config, setConfig] = useState(initialConfig);
+  useIPCServer({
+    socketPath,
+    scenario,
+    onUpdate: (newConfig) => setConfig(newConfig as CalendarConfig),
+  });
+
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -450,7 +461,7 @@ export function Calendar({ id, config, socketPath, scenario = "display" }: Props
   const currentTimeDecimal = currentHour + currentMinute / 60;
   const showNowIndicator = currentHour >= START_HOUR && currentHour < END_HOUR;
 
-  const timeSlots: JSX.Element[] = [];
+  const timeSlots: React.JSX.Element[] = [];
   let timeSlotIndex = 0;
   for (let hour = START_HOUR; hour < END_HOUR; hour++) {
     // Hour label on first half
@@ -464,7 +475,7 @@ export function Calendar({ id, config, socketPath, scenario = "display" }: Props
       ? Math.floor(((currentTimeDecimal - slotTime) / 0.5) * firstHalfHeight)
       : -1;
 
-    const firstHalfLines: JSX.Element[] = [];
+    const firstHalfLines: React.JSX.Element[] = [];
     for (let line = 0; line < firstHalfHeight; line++) {
       const isNowLine = line === nowLineInFirstHalf;
       if (isNowLine) {
@@ -502,7 +513,7 @@ export function Calendar({ id, config, socketPath, scenario = "display" }: Props
       ? Math.floor(((currentTimeDecimal - secondSlotTime) / 0.5) * secondHalfHeight)
       : -1;
 
-    const secondHalfLines: JSX.Element[] = [];
+    const secondHalfLines: React.JSX.Element[] = [];
     for (let line = 0; line < secondHalfHeight; line++) {
       const isNowLine = line === nowLineInSecondHalf;
       if (isNowLine) {

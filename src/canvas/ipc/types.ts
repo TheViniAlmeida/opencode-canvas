@@ -11,6 +11,7 @@ export type ControllerMessage =
 // Messages sent from Canvas to Controller (Claude)
 export type CanvasMessage =
   | { type: "ready"; scenario: string }
+  | { type: "ack"; action: "update" | "close" }
   | { type: "selected"; data: unknown }
   | { type: "cancelled"; reason?: string }
   | { type: "error"; message: string }

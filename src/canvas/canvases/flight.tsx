@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
-import { useIPC } from "./calendar/hooks/use-ipc";
+import { useIPCServer } from "./calendar/hooks/use-ipc-server.ts";
 import {
   type FlightConfig,
   type FlightResult,
@@ -63,7 +63,7 @@ export function FlightCanvas({
   const spinnerChars = ["|", "/", "-", "\\"];
 
   // IPC connection
-  const ipc = useIPC({
+  const ipc = useIPCServer({
     socketPath,
     scenario,
     onClose: () => exit(),

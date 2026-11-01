@@ -1,8 +1,6 @@
-// IPC Server - Canvas side (for standalone CLI mode)
-// Listens on a Unix domain socket for controller commands
-
-import type { ControllerMessage, CanvasMessage } from "./types";
-import { unlinkSync, existsSync } from "fs";
+import type { Socket } from 'bun';
+import { existsSync, unlinkSync } from 'node:fs';
+import type { CanvasMessage, ControllerMessage } from './types.ts';
 
 export interface IPCServerOptions {
   socketPath: string;
@@ -17,68 +15,100 @@ export interface IPCServer {
   close: () => void;
 }
 
+function parseControllerMessage(line: string): ControllerMessage {
+  const value: unknown = JSON.parse(line);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid canvas IPC message');
+  }
+  const input = value as Record<string, unknown>;
+  switch (input.type) {
+    case 'update':
+      if (!Object.hasOwn(input, 'config')) throw new Error('Missing canvas update config');
+      return { type: 'update', config: input.config };
+    case 'close':
+    case 'ping':
+    case 'getSelection':
+    case 'getContent':
+      return { type: input.type };
+    default:
+      throw new Error('Unsupported canvas IPC message');
+  }
+}
+
 export async function createIPCServer(options: IPCServerOptions): Promise<IPCServer> {
   const { socketPath, onMessage, onClientConnect, onClientDisconnect, onError } = options;
+  if (existsSync(socketPath)) unlinkSync(socketPath);
 
-  // Remove existing socket file if it exists
-  if (existsSync(socketPath)) {
-    unlinkSync(socketPath);
-  }
-
-  const clients = new Set<any>();
-  let buffer = "";
+  const clients = new Set<Socket<unknown>>();
+  const buffers = new Map<Socket<unknown>, string>();
+  const send = (socket: Socket<unknown>, message: CanvasMessage): void => {
+    socket.write(JSON.stringify(message) + '\n');
+  };
 
   const server = Bun.listen({
     unix: socketPath,
     socket: {
       open(socket) {
         clients.add(socket);
+        buffers.set(socket, '');
         onClientConnect?.();
       },
-
       data(socket, data) {
-        // Accumulate data and parse complete JSON messages
-        buffer += data.toString();
+        let buffer = (buffers.get(socket) ?? '') + data.toString();
+        if (buffer.length > 1_000_000) {
+          onError?.(new Error('Canvas IPC input exceeds size limit'));
+          send(socket, { type: 'error', message: 'Canvas IPC input too large' });
+          socket.end();
+          buffers.delete(socket);
+          return;
+        }
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
+        let newline = buffer.indexOf('\n');
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline);
+          buffer = buffer.slice(newline + 1);
           if (line.trim()) {
+            let message: ControllerMessage;
             try {
-              const msg = JSON.parse(line) as ControllerMessage;
-              onMessage(msg);
-            } catch (e) {
-              onError?.(new Error(`Failed to parse message: ${line}`));
+              message = parseControllerMessage(line);
+            } catch {
+              onError?.(new Error('Canvas IPC parse failed'));
+              send(socket, { type: 'error', message: 'Invalid canvas IPC message' });
+              newline = buffer.indexOf('\n');
+              continue;
+            }
+            try {
+              onMessage(message);
+              if (message.type === 'update' || message.type === 'close') {
+                send(socket, { type: 'ack', action: message.type });
+              }
+            } catch {
+              onError?.(new Error(`Canvas IPC handler failed for ${message.type}`));
+              send(socket, { type: 'error', message: `Canvas ${message.type} failed` });
             }
           }
+          newline = buffer.indexOf('\n');
         }
+        buffers.set(socket, buffer);
       },
-
       close(socket) {
         clients.delete(socket);
+        buffers.delete(socket);
         onClientDisconnect?.();
       },
-
-      error(socket, error) {
+      error(_socket, error) {
         onError?.(error);
       },
     },
   });
 
   return {
-    broadcast(msg: CanvasMessage) {
-      const data = JSON.stringify(msg) + "\n";
-      for (const client of clients) {
-        client.write(data);
-      }
+    broadcast(message) {
+      for (const client of clients) send(client, message);
     },
-
     close() {
       server.stop();
-      if (existsSync(socketPath)) {
-        unlinkSync(socketPath);
-      }
+      if (existsSync(socketPath)) unlinkSync(socketPath);
     },
   };
 }

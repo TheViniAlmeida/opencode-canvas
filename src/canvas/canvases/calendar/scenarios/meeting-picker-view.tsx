@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
 import { useMouse, type MouseEvent } from "../hooks/use-mouse";
-import { useIPC } from "../hooks/use-ipc";
+import { useIPCServer } from "../hooks/use-ipc-server.ts";
 import type { MeetingPickerConfig, MeetingPickerResult, NamedCalendar } from "../../../scenarios/types";
 import {
   getWeekDays,
@@ -30,7 +30,8 @@ interface SlotInfo {
   endTime: Date;
 }
 
-export function MeetingPickerView({ id, config, socketPath }: Props) {
+export function MeetingPickerView({ id, config: initialConfig, socketPath }: Props) {
+  const [config, setConfig] = useState(initialConfig);
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -57,9 +58,10 @@ export function MeetingPickerView({ id, config, socketPath }: Props) {
     endHour = 22,
   } = config;
 
-  const ipc = useIPC({
+  const ipc = useIPCServer({
     socketPath,
     scenario: "meeting-picker",
+    onUpdate: (newConfig) => setConfig(newConfig as MeetingPickerConfig),
     onClose: () => exit(),
   });
 
@@ -394,7 +396,7 @@ export function MeetingPickerView({ id, config, socketPath }: Props) {
 
   // Render time column
   const renderTimeColumn = () => {
-    const slots: JSX.Element[] = [];
+    const slots: React.JSX.Element[] = [];
     for (let slotIndex = 0; slotIndex < totalSlots; slotIndex++) {
       const height = slotHeights[slotIndex];
       const slotMinutes = slotIndex * slotGranularity;
@@ -402,7 +404,7 @@ export function MeetingPickerView({ id, config, socketPath }: Props) {
       const minute = slotMinutes % 60;
       const showLabel = minute === 0;
 
-      const lines: JSX.Element[] = [];
+      const lines: React.JSX.Element[] = [];
       for (let line = 0; line < height; line++) {
         lines.push(
           <Text key={line} color="gray">
@@ -424,7 +426,7 @@ export function MeetingPickerView({ id, config, socketPath }: Props) {
   // Render day column
   const renderDayColumn = (dayIndex: number) => {
     const day = weekDays[dayIndex];
-    const slots: JSX.Element[] = [];
+    const slots: React.JSX.Element[] = [];
 
     for (let slotIndex = 0; slotIndex < totalSlots; slotIndex++) {
       const height = slotHeights[slotIndex];
@@ -438,7 +440,7 @@ export function MeetingPickerView({ id, config, socketPath }: Props) {
       const isCursor = cursorDay === dayIndex && cursorSlot === slotIndex;
       const isFree = !isBusy;
 
-      const lines: JSX.Element[] = [];
+      const lines: React.JSX.Element[] = [];
       for (let line = 0; line < height; line++) {
         let content = " ".repeat(columnWidth - 1);
         let bgColor: string | undefined;
